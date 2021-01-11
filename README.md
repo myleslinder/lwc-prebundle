@@ -12,11 +12,19 @@ If Salesforce ever does provide a way to use code from `node_modules` (unlikely,
 
 As i'm sure goes without saying, NOT RECOMMENDED FOR PRODUCTION.
 
+[The Salesforce recommended way to include third party dependencies](https://developer.salesforce.com/docs/component-library/documentation/lwc/js_third_party_library.html) is to upload the js file as a static resource and then load the script the first time your component renders.
+
+- I hope they load that from a cache if you have multiple components on the same page request the same static resource
+- It is quite unfortunate that you can only fetch the file once your component is finished rendering for the first time. All your component code has to get downloaded and parsed and they have to finish an initial render of your component before you can make the request to download the external js file and then parse that.
+- It's also unfortunate that you get no dead-code elimination in that file, you load the entire library file no matter what
+
 ## Overview
 
 Before you deploy your code to Salesforce lwc-prebundle will scan all the `.js` files in your `lwc/` sub-folders for imports to `node_modules` and redirect them to an LWC component with the same name as the dependency. That LWC component simply imports the actual dependency into a utility file, that is ignored by Salesforce, and re-exports everything that's imported. When the code is uploaded to Salesforce the only code that is imported or exported is from one LWC to another.
 
 Once your deployment is finished, calling `lwc-prebundle cleanup` resets your import statements back to the original `node_modules` location so that you get all the typings, etc that the original package provides.
+
+If you think about it, this is very similar to the 'Deploy to Salesforce' button just metadata deploying some Apex classes into your org 😂.
 
 lwc-prebundle will put each package into it's own LWC bundle, as opposed to a singular LWC bundle for all dependencies, for a few reasons:
 
