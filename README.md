@@ -1,5 +1,7 @@
 # lwc-prebundle
 
+This project is **experimental** and modifies your code, if you're trying it out please ensure you've commited prior.
+
 Use external dependencies from `node_modules` in your lwc component bundles without having to deal with static resources, lost typings, having to bundle them yourself, or cluttering up your `lwc` folder in your sfdx projects.
 
 Upgrade dependencies as you would in any off-platform project.
@@ -12,9 +14,9 @@ As i'm sure goes without saying, NOT RECOMMENDED FOR PRODUCTION.
 
 ## Overview
 
-Before you deploy your code to Salesforce lwc-prebundle will scan all the `.js` files in your `lwc/` sub-folders for imports to `node_modules` and redirect them to an LWC component with the same name. That LWC component simply imports the actual third party code into a utility file, that is ignored by Salesforce, and re-exports everything that's imported. When the code is uploaded to Salesforce the only code that is imported or exported is from one LWC to another.
+Before you deploy your code to Salesforce lwc-prebundle will scan all the `.js` files in your `lwc/` sub-folders for imports to `node_modules` and redirect them to an LWC component with the same name as the dependency. That LWC component simply imports the actual dependency into a utility file, that is ignored by Salesforce, and re-exports everything that's imported. When the code is uploaded to Salesforce the only code that is imported or exported is from one LWC to another.
 
-Once your deployment is finished, lwc-prebundle resets your import statements back to the original `node_modules` location so that you get all the typings, etc that the original package provides.
+Once your deployment is finished, calling `lwc-prebundle cleanup` resets your import statements back to the original `node_modules` location so that you get all the typings, etc that the original package provides.
 
 lwc-prebundle will put each package into it's own LWC bundle, as opposed to a singular LWC bundle for all dependencies, for a few reasons:
 
@@ -27,7 +29,7 @@ A common concern with providing a unique LWC bundle for each external dependency
 
 lwc-prebundle keeps track of the specific imports you've used from the dependencies and will only re-bundle the dependency if somewhere in your code you add or remove an import from that dependency. Deploying to Salesforce already takes long enough, wherever possible we try not to increase the bundling time.
 
-Right now the cleanup step is optional if you want to perform a one-time import.
+The cleanup step is optional if you want to perform a one-time import. `lwc-prebundle` will still keep track of the dependency so you can call `lwc-prebundle cleanup` at any point in the future.
 
 ## Usage
 
@@ -54,9 +56,12 @@ https://stackoverflow.com/questions/50835221/pass-command-line-argument-to-child
 ## TODO
 
 0. If a dependency no longer exists delete the cmp folder of the cache so it doesn't take up disk space unnecessarily
-1. Make available as SFDX plugin to take advantage of predeploy and postdeploy hooks
+1. Offer a purge command to clear the cache
+2. Make available as SFDX plugin to take advantage of predeploy and postdeploy hooks
    - This is only going to be worth doing if the predeploy hook gets called if nothing in the source seems to have changed and if the postdeploy hooks get called if the deployment fails, which I don't think that it will, so.
-2. Bypass the trash when deleting the cached files if possible?
+3. I think it'll serve from the cache even if you have one less import now
+
+- Obviously not ideal as it you need to be able to remove unused deps
 
 ## Roadmap
 
@@ -66,7 +71,7 @@ Add prompts on `init` to select if looking for Typescript for non-component file
 
 We can offer expirimental support for component files using the comment approach but it is very much experimental.
 
-We will look in the root of the lwc folder for a tsconfig file to use, falling back to the root if it doesn't exist there.
+We will look in the root of the lwc folder for a tsconfig file to use, falling back to the root if it doesn't exist there. We will use a recommended one if one does not exist in the root either.
 
 It's interesting to consider ts support for non-cmp files because how much code actually gets written outside of cmp files? I mean it would be nice to be able to have all utilities written with types, etc. You could also get in the habit of writing most of your code in the non-cmp file but that adds indirection so I don't know.
 
@@ -94,36 +99,41 @@ I would love to be able to support Tailwind for a particular component (I know s
 
 ### Config file support
 
-Will support a lwc-prebundle.config.{js|json} with keys for every file that you want to bundle. All external dependencies are bundled by default but this offers an opportunity to inject rollup configuration for a particular dependency. No non-external code is bundled unless the component bundle name is listed in the configuration file.
+Will support a lwc-prebundle.config.{js|json} to allow providing config for all, or any particular file, that you want to bundle. All external dependencies are bundled by default but this offers an opportunity to inject rollup configuration for a particular dependency, or to have a component js/ts file bundled. No non-external code is bundled unless the component bundle name is listed in the configuration file, or the project is initialized as a ts project.
 
 This will basically support anything rollup supports, with the exceptions being you can't overwrite certain required configuration such as the output being set to type `esm`.
 
 All the sub files of a component with this setup need to have the same configuration which I guess isn't the end of the world and I also imagine that you really just want to set the configuration for all files so you can use something like typescript (or terser or post-css [with emit] until we add it)
 
-Will need a way to pass a flag to the CLI, or to set it here, so that if you want to run some version of the configuration for everything, with the specific ones falling back to that (or being merged with that).
-
 You would get a mapping like `a.js` -> `a.bundle.js` within the same component but because we can't run rollup on the cmp js file itself we'll need to modify those imports also which isn't a big deal because it's the same as what we're already doing and rollup obviously preserves exports.
 
-We could just do it the same way we do the external stuff by adding the `.bundle.js` file only while uploading but we would literally just delete it and rebundle because we're not going to reinvent rollups caching and start hashing the actual contents of a file or something. Would be pretty cool to be able to look into the .git folder the same way vscode does to see if the file is modified?
+We could accept the extension in the config file or as part of init, likely as part of init so that it can be added to the ignores. Actually, the forceignore needs to contain the name of the _unbundled_ file which is dynamic. So I would dynamically add and remove from the forceignore file on each predeploy call for each of the files that are being bundled.
+
+We could just do it the same way we do the external stuff by adding the `.bundle.js` file only while uploading. We do have the file contents (we're currently clearing them to save space) but we could compare those values and serve from cache if unchanged?
+Alternatively we would literally just delete it and rebundle every time.
+
+This model below doesn't allow for any output modifications.
 
 ```javascript
 import typescript from '@rollup/plugin-typescript'
 export default {
-  // external dependency
-  robot3: {
-    include: '*', // optional, unlikely to provide for an external dep but this shows everything,
-  },
-  // authored component
-  myComponent: {
-    include: ['utils.ts'], // need to provide extension per, could offer string|string[]
+  dependencies: {
     input: {
       plugins: [
-        typescript,
-        /* plugin function references, do not call them */
+        /* rollup plugins */
       ],
     },
-    output: {
-      file: ['utils.js'], // this is a nice way to do it if you write ts so no need
+  },
+  components: {
+    '*': {
+      /* wildcard, matches all, same options, merged with specific */
+    },
+    'cmpName/filename': {
+      input: {
+        plugins: [
+          /* rollup plugins */
+        ],
+      },
     },
   },
 }
@@ -151,6 +161,7 @@ It would be great to be able to have a `src/` folder and nest the components to 
 
 # Known Issues & Limitations
 
+- Dependencies with both named and default exports are not currently supported
 - You cannot have an LWC component named the same as an external dependency
 - If your deployment fails then the script afterward doesn't run...but this monstrosity is a current workaround:
   ```bash
@@ -167,6 +178,7 @@ It would be great to be able to have a `src/` folder and nest the components to 
 
 - [ ] Consider migrating to reghex to parse the imports and their items
 - [ ] Evaluate if snowpack might be better here than rollup
+- [ ] Detect filesize and roll back if it's going to be too big and provide error notice
 
 # Notes
 
@@ -178,16 +190,18 @@ You cannot accomplish this in any way that requires actually parsing the compone
 [![License](https://img.shields.io/npm/l/lwc-prebundle.svg)](https://github.com/myleslinder/lwc-prebundle/blob/master/package.json)
 
 <!-- toc -->
-* [lwc-prebundle](#lwc-prebundle)
-* [Known Issues & Limitations](#known-issues--limitations)
-* [Notes](#notes)
-* [Usage](#usage)
-* [Commands](#commands)
+
+- [lwc-prebundle](#lwc-prebundle)
+- [Known Issues & Limitations](#known-issues--limitations)
+- [Notes](#notes)
+- [Usage](#usage)
+- [Commands](#commands)
 <!-- tocstop -->
 
 # Usage
 
 <!-- usage -->
+
 ```sh-session
 $ npm install -g lwc-prebundle
 $ lwc-prebundle COMMAND
@@ -199,15 +213,17 @@ USAGE
   $ lwc-prebundle COMMAND
 ...
 ```
+
 <!-- usagestop -->
 
 # Commands
 
 <!-- commands -->
-* [`lwc-prebundle cleanup`](#lwc-prebundle-cleanup)
-* [`lwc-prebundle help [COMMAND]`](#lwc-prebundle-help-command)
-* [`lwc-prebundle init`](#lwc-prebundle-init)
-* [`lwc-prebundle prepare`](#lwc-prebundle-prepare)
+
+- [`lwc-prebundle cleanup`](#lwc-prebundle-cleanup)
+- [`lwc-prebundle help [COMMAND]`](#lwc-prebundle-help-command)
+- [`lwc-prebundle init`](#lwc-prebundle-init)
+- [`lwc-prebundle prepare`](#lwc-prebundle-prepare)
 
 ## `lwc-prebundle cleanup`
 
@@ -269,4 +285,5 @@ OPTIONS
 ```
 
 _See code: [src/commands/prepare.ts](https://github.com/myleslinder/lwc-prebundle/blob/v0.0.2/src/commands/prepare.ts)_
+
 <!-- commandsstop -->
