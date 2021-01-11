@@ -1,7 +1,7 @@
 {
   "name": "lwc-prebundle",
   "description": "Use external dependencies from `node_modules` in your lwc component bundles",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Myles Linder @myleslinder",
   "bin": {
     "lwc-prebundle": "./bin/run"
@@ -11,11 +11,13 @@
     "@oclif/command": "^1",
     "@oclif/config": "^1",
     "@oclif/plugin-help": "^3",
-    "tslib": "^1",
     "@rollup/plugin-auto-install": "^2.1.0",
     "@rollup/plugin-inject": "^4.0.2",
     "@rollup/plugin-node-resolve": "^11.0.1",
-    "rollup": "^2.36.1"
+    "@types/inquirer": "^7.3.1",
+    "inquirer": "^7.3.3",
+    "rollup": "^2.36.1",
+    "tslib": "^1"
   },
   "devDependencies": {
     "@oclif/dev-cli": "^1",
@@ -61,8 +63,7 @@
     "posttest": "eslint . --ext .ts --config .eslintrc",
     "prepack": "rm -rf lib && tsc -b && oclif-dev manifest && oclif-dev readme",
     "test": "nyc --extension .ts mocha --forbid-only \"test/**/*.test.ts\"",
-    "version": "oclif-dev readme && git add README.md",
-    "postinstall": "lwc-prebundle init"
+    "version": "oclif-dev readme && git add README.md"
   },
   "types": "lib/index.d.ts"
 }

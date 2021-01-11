@@ -6,13 +6,13 @@ Upgrade dependencies as you would in any off-platform project.
 Let yarn/npm still take care of your lock files.
 Runs on CI machines as long as they can run node and allow for `fs` operations.
 
-If Salesforce ever does provide a way to use code from `node_modules` (unlikely, although the a [few TC-39 propsals might help](https://github.com/tc39/proposal-ses)) within your LWC components you can just not call lwc-prebundle before deploying with no need to change your code at all.
+If Salesforce ever does provide a way to use code from `node_modules` (unlikely, although a [few TC-39 propsals might help](https://github.com/tc39/proposal-ses)) within your LWC components you can just not call lwc-prebundle before deploying with no need to change your code at all.
 
 As i'm sure goes without saying, NOT RECOMMENDED FOR PRODUCTION.
 
 ## Overview
 
-Before you deploy your code to Salesforce lwc-prebundle will scan all the `.js` files in your `lwc/` sub-folders for imports to `node_modules` and redirect them to an LWC component with the same name. The LWC component simply imports the actual third party code into a utility file, that is ignored by Salesforce, and re-exports everything that's imported. When the code is uploaded to Salesforce the only code that is imported or exported is from one LWC to another.
+Before you deploy your code to Salesforce lwc-prebundle will scan all the `.js` files in your `lwc/` sub-folders for imports to `node_modules` and redirect them to an LWC component with the same name. That LWC component simply imports the actual third party code into a utility file, that is ignored by Salesforce, and re-exports everything that's imported. When the code is uploaded to Salesforce the only code that is imported or exported is from one LWC to another.
 
 Once your deployment is finished, lwc-prebundle resets your import statements back to the original `node_modules` location so that you get all the typings, etc that the original package provides.
 
@@ -26,6 +26,8 @@ lwc-prebundle will put each package into it's own LWC bundle, as opposed to a si
 A common concern with providing a unique LWC bundle for each external dependency is that it will clutter up the `lwc/` folder in your sfdx project. To mitigate this lwc-prebundle only stores the external dependency LWC bundle within the `lwc` folder until the deployment is complete and hides it away when not in use. This also allows for treating this external code the same way you would in any other project, not part of your authored code.
 
 lwc-prebundle keeps track of the specific imports you've used from the dependencies and will only re-bundle the dependency if somewhere in your code you add or remove an import from that dependency. Deploying to Salesforce already takes long enough, wherever possible we try not to increase the bundling time.
+
+Right now the cleanup step is optional if you want to perform a one-time import.
 
 ## Usage
 
@@ -54,6 +56,7 @@ https://stackoverflow.com/questions/50835221/pass-command-line-argument-to-child
 0. If a dependency no longer exists delete the cmp folder of the cache so it doesn't take up disk space unnecessarily
 1. Make available as SFDX plugin to take advantage of predeploy and postdeploy hooks
    - This is only going to be worth doing if the predeploy hook gets called if nothing in the source seems to have changed and if the postdeploy hooks get called if the deployment fails, which I don't think that it will, so.
+2. Bypass the trash when deleting the cached files if possible?
 
 ## Roadmap
 
@@ -78,6 +81,8 @@ Babel support can be setup through the config file if desired.
 
 The reason I would offer TypeScript support first-class and not babel is because when Salesforce does it's own bundling I'm pretty sure it uses babel and rollup as well so the only real reason you would need babel is to get like top-level await or something (although optional chaining still doesn't seem to be available by default in lwc)
 
+Plus there's no way to ship sourcemaps but I guess with like an esnext target of babel it would look a lot like your code.
+
 ### Post-CSS Support
 
 [Ability to run post-css on cmp {css|scss} files](https://www.npmjs.com/package/rollup-plugin-postcss)
@@ -98,6 +103,8 @@ All the sub files of a component with this setup need to have the same configura
 Will need a way to pass a flag to the CLI, or to set it here, so that if you want to run some version of the configuration for everything, with the specific ones falling back to that (or being merged with that).
 
 You would get a mapping like `a.js` -> `a.bundle.js` within the same component but because we can't run rollup on the cmp js file itself we'll need to modify those imports also which isn't a big deal because it's the same as what we're already doing and rollup obviously preserves exports.
+
+We could just do it the same way we do the external stuff by adding the `.bundle.js` file only while uploading but we would literally just delete it and rebundle because we're not going to reinvent rollups caching and start hashing the actual contents of a file or something. Would be pretty cool to be able to look into the .git folder the same way vscode does to see if the file is modified?
 
 ```javascript
 import typescript from '@rollup/plugin-typescript'
@@ -158,13 +165,12 @@ It would be great to be able to have a `src/` folder and nest the components to 
 
 ### Codebase
 
-- [ ] Publish to npm
 - [ ] Consider migrating to reghex to parse the imports and their items
 - [ ] Evaluate if snowpack might be better here than rollup
 
 # Notes
 
-You cannot accomplish this in any way that requires actually parsing the component js files (such as rollup plugin alias, babel, etc) because you will need to transform the decorators,which means Salesforce won't accept that code.
+You cannot accomplish this in any way that requires actually parsing the component js files (such as rollup plugin alias, babel, etc) because you will need to transform the decorators,which means Salesforce won't accept the generated code.
 
 [![oclif](https://img.shields.io/badge/cli-oclif-brightgreen.svg)](https://oclif.io)
 [![Version](https://img.shields.io/npm/v/lwc-prebundle.svg)](https://npmjs.org/package/lwc-prebundle)
@@ -172,52 +178,51 @@ You cannot accomplish this in any way that requires actually parsing the compone
 [![License](https://img.shields.io/npm/l/lwc-prebundle.svg)](https://github.com/myleslinder/lwc-prebundle/blob/master/package.json)
 
 <!-- toc -->
-
-- [Usage](#usage)
-- [Commands](#commands)
+* [lwc-prebundle](#lwc-prebundle)
+* [Known Issues & Limitations](#known-issues--limitations)
+* [Notes](#notes)
+* [Usage](#usage)
+* [Commands](#commands)
 <!-- tocstop -->
 
 # Usage
 
 <!-- usage -->
-
 ```sh-session
 $ npm install -g lwc-prebundle
 $ lwc-prebundle COMMAND
 running command...
 $ lwc-prebundle (-v|--version|version)
-lwc-prebundle/0.0.1 darwin-x64 node-v15.1.0
+lwc-prebundle/0.0.2 darwin-x64 node-v15.1.0
 $ lwc-prebundle --help [COMMAND]
 USAGE
   $ lwc-prebundle COMMAND
 ...
 ```
-
 <!-- usagestop -->
 
 # Commands
 
 <!-- commands -->
+* [`lwc-prebundle cleanup`](#lwc-prebundle-cleanup)
+* [`lwc-prebundle help [COMMAND]`](#lwc-prebundle-help-command)
+* [`lwc-prebundle init`](#lwc-prebundle-init)
+* [`lwc-prebundle prepare`](#lwc-prebundle-prepare)
 
-- [`lwc-prebundle help [COMMAND]`](#lwc-prebundle-help-command)
-- [`lwc-prebundle cleanup [LWC_ROOT]`](#lwc-prebundle-cleanup-file)
-- [`lwc-prebundle init`](#lwc-prebundle-init)
-- [`lwc-prebundle prepare [LWC-ROOT]`](#lwc-prebundle-prepare-lwc-root)
-
-## `lwc-prebundle cleanup [LWC_ROOT]`
+## `lwc-prebundle cleanup`
 
 describe the command here
 
 ```
 USAGE
-  $ lwc-prebundle cleanup [FILE]
+  $ lwc-prebundle cleanup
 
 OPTIONS
   -h, --help       show CLI help
-  -r               (optional) the path to the lwc folder
+  -r, --root=root  the path from the project root to the lwc directory
 ```
 
-_See code: [src/commands/cleanup.ts](https://github.com/myleslinder/lwc-prebundle/blob/v0.0.1/src/commands/cleanup.ts)_
+_See code: [src/commands/cleanup.ts](https://github.com/myleslinder/lwc-prebundle/blob/v0.0.2/src/commands/cleanup.ts)_
 
 ## `lwc-prebundle help [COMMAND]`
 
@@ -248,22 +253,20 @@ OPTIONS
   -h, --help  show CLI help
 ```
 
-_See code: [src/commands/init.ts](https://github.com/myleslinder/lwc-prebundle/blob/v0.0.1/src/commands/init.ts)_
+_See code: [src/commands/init.ts](https://github.com/myleslinder/lwc-prebundle/blob/v0.0.2/src/commands/init.ts)_
 
-## `lwc-prebundle prepare [LWC-ROOT]`
+## `lwc-prebundle prepare`
 
 describe the command here
 
 ```
 USAGE
-  $ lwc-prebundle prepare [LWC-ROOT]
+  $ lwc-prebundle prepare
 
 OPTIONS
-  -f, --force
   -h, --help       show CLI help
-  -r, --name=name  the path from the project root the lwc directory
+  -r, --root=root  the path from the project root the lwc directory
 ```
 
-_See code: [src/commands/prepare.ts](https://github.com/myleslinder/lwc-prebundle/blob/v0.0.1/src/commands/prepare.ts)_
-
+_See code: [src/commands/prepare.ts](https://github.com/myleslinder/lwc-prebundle/blob/v0.0.2/src/commands/prepare.ts)_
 <!-- commandsstop -->
