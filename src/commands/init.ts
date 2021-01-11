@@ -1,4 +1,5 @@
 import { Command, flags } from '@oclif/command'
+// import inquirer = require('inquirer')
 import augmentIgnoreFiles from '../utils/ignore-files'
 
 export default class Init extends Command {
@@ -9,6 +10,14 @@ export default class Init extends Command {
   }
 
   async run() {
-    augmentIgnoreFiles()
+    // let responses: any = await inquirer.prompt([
+    //   {
+    //     name: 'type',
+    //     message: 'Select a project type',
+    //     type: 'list',
+    //     choices: [{ name: 'TypeScript' }, { name: 'JavaScript' }],
+    //   },
+    // ])
+    await augmentIgnoreFiles()
   }
 }

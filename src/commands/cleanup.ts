@@ -1,7 +1,8 @@
 import { Command, flags } from '@oclif/command'
 import { FALLBACK_LWC_ROOT } from '../constants/filepaths'
-import { cachedImports } from '../utils/get-cache'
-import resetImports from '../utils/reset-imports'
+import { getCachedProjectInfo } from '../utils/get-cache'
+import { resetFileImports } from '../utils/helpers'
+import { cacheOrDestroyBundles } from '../utils/populate-cache'
 
 export default class Cleanup extends Command {
   static description = 'describe the command here'
@@ -10,12 +11,22 @@ export default class Cleanup extends Command {
     help: flags.help({ char: 'h' }),
     root: flags.string({
       char: 'r',
-      description: 'the path from the project root the lwc directory',
+      description: 'the path from the project root to the lwc directory',
     }),
   }
 
   async run() {
     const { flags } = this.parse(Cleanup)
-    await resetImports(flags.root || FALLBACK_LWC_ROOT, await cachedImports())
+    const projectCache = await getCachedProjectInfo()
+    if (projectCache) {
+      await resetFileImports(
+        flags.root || FALLBACK_LWC_ROOT,
+        projectCache.components
+      )
+      await cacheOrDestroyBundles(
+        flags.root || FALLBACK_LWC_ROOT,
+        projectCache.dependencies
+      )
+    }
   }
 }

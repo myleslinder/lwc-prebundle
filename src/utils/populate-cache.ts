@@ -1,26 +1,36 @@
-import type { Cache as PreBundleCache } from '../types/cache'
-
 import { promises as fs } from 'fs'
 import { IMPORTS_CACHE, CACHE_FOLDER } from '../constants/filepaths'
-import { doesCacheFileExist, doesCacheFolderExist } from './get-cache'
+import { doesCacheFolderExist } from './get-cache'
+import { doesFileExist } from './helpers'
+import { ProjectImportInfo, ProjectDependencyInfo } from './types'
 
-export const cacheImports = async (newImports: PreBundleCache) => {
+export const writeCacheFile = async (projectInfo: ProjectImportInfo) => {
   const cacheFolderExists = await doesCacheFolderExist()
   if (!cacheFolderExists) {
     fs.mkdir(CACHE_FOLDER)
   }
-  const cacheExists = await doesCacheFileExist()
-  const newCache = { ...newImports }
-  if (cacheExists) {
-    const file = await fs.readFile(IMPORTS_CACHE)
-    const existingCache: PreBundleCache = JSON.parse(file.toString())
-    Object.keys(newImports).forEach(name => {
-      if (newImports[name].cacheHit) {
-        newCache[name] = existingCache[name]
+  await fs.writeFile(IMPORTS_CACHE, JSON.stringify(projectInfo))
+}
+
+export const cacheOrDestroyBundles = async (
+  LWC_ROOT: string,
+  dependencies: ProjectDependencyInfo
+) => {
+  Object.keys(dependencies).forEach(async depName => {
+    // check if there's a bundle in lwc with that name
+    if (await doesFileExist(`${LWC_ROOT}/${depName}`)) {
+      // if yes check if it has a export file
+      if (await doesFileExist(`${LWC_ROOT}/${depName}/${depName}.js`)) {
+        // if yes rename to move into cache
+        await fs.rename(`${LWC_ROOT}/${depName}`, `${CACHE_FOLDER}/${depName}`)
       } else {
-        newCache[name] = newImports[name]
+        const bundleDir = await fs.readdir(`${LWC_ROOT}/${depName}`)
+        bundleDir.forEach(fName => {
+          fs.unlink(`${LWC_ROOT}/${depName}/${fName}`)
+        })
+
+        fs.rmdir(`${LWC_ROOT}/${depName}`)
       }
-    })
-  }
-  await fs.writeFile(CACHE_FOLDER, JSON.stringify(newCache))
+    }
+  })
 }
