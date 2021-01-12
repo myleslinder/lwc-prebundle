@@ -4,9 +4,7 @@ This project is **experimental** and modifies your code, if you're trying it out
 
 Use external dependencies from `node_modules` in your lwc component bundles without having to deal with static resources, lost typings, having to bundle them yourself, or cluttering up your `lwc` folder in your sfdx projects.
 
-Upgrade dependencies as you would in any off-platform project.
-Let yarn/npm still take care of your lock files.
-Runs on CI machines as long as they can run node and allow for `fs` operations.
+Upgrade dependencies as you would in any off-platform project. Let yarn/npm still take care of your lock files. 
 
 If Salesforce ever does provide a way to use code from `node_modules` (unlikely, although a [few TC-39 propsals might help](https://github.com/tc39/proposal-ses)) within your LWC components you can just not call lwc-prebundle before deploying with no need to change your code at all.
 
@@ -37,7 +35,7 @@ A common concern with providing a unique LWC bundle for each external dependency
 
 lwc-prebundle keeps track of the specific imports you've used from the dependencies and will only re-bundle the dependency if somewhere in your code you add or remove an import from that dependency. Deploying to Salesforce already takes long enough, wherever possible we try not to increase the bundling time.
 
-The cleanup step is optional if you want to perform a one-time import. `lwc-prebundle` will still keep track of the dependency so you can call `lwc-prebundle cleanup` at any point in the future.
+The cleanup step is optional if you want to perform a one-time import, for example while creating a package. `lwc-prebundle` will still keep track of the dependency so you can call `lwc-prebundle cleanup` at any point in the future.
 
 ## Usage
 
